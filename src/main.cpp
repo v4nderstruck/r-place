@@ -1,8 +1,7 @@
-#include <boost/asio/ip/address.hpp>
-#include "httpserver.hpp"
 #include "tile.hpp"
+#include "wsserver.hpp"
 #include <CLI11.hpp>
-#include <boost/beast/http.hpp>
+#include <boost/asio/ip/address.hpp>
 #include <iostream>
 #include <memory>
 #include <plog/Formatters/TxtFormatter.h>
@@ -13,7 +12,7 @@
 #define APP_DESC "r/place clone v0.0.1"
 
 int main(int argc, char **argv) {
-  plog::init<plog::TxtFormatter>(plog::debug, plog::streamStdOut);
+  plog::init<plog::TxtFormatter>(plog::info, plog::streamStdOut);
 
   CLI::App app{APP_DESC};
   int width = 1000;

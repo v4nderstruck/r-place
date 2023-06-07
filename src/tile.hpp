@@ -1,8 +1,8 @@
 #ifndef TILE_HPP
 #define TILE_HPP
 #include <mutex>
-#include <vector>
 #include <plog/Log.h>
+#include <vector>
 
 class Tile {
 public:
@@ -10,11 +10,9 @@ public:
   // set a Tile to a color
   void set(int x, int y, int color);
 
-
-
 private:
   int x; // width
-  int y; // height 
+  int y; // height
   std::mutex mtx;
   std::vector<int> tile_map; // holds colors, 3 bytes for RGB required
 };

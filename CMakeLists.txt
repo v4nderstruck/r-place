@@ -1,9 +1,13 @@
 cmake_minimum_required(VERSION 3.10)
 project(rplace)
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 11)
 
 include(ExternalProject)
+include(FetchContent)
+
+FetchContent_Declare(json URL https://github.com/nlohmann/json/releases/download/v3.11.2/json.tar.xz)
+FetchContent_MakeAvailable(json)
 
 set(INSTALL_DIR ${CMAKE_BINARY_DIR}/INSTALL)
 set(THIRD_PARTY_DIR ${CMAKE_SOURCE_DIR}/third-party)
@@ -38,5 +42,6 @@ file(GLOB SRC
 )
 
 add_executable(rplace ${SRC})
+target_link_libraries(rplace PRIVATE nlohmann_json::nlohmann_json)
 
 

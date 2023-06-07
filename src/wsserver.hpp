@@ -3,35 +3,37 @@
 
 #include "tile.hpp"
 #include <boost/asio.hpp>
-#include <boost/asio/io_context.hpp>
 #include <boost/beast.hpp>
-#include <boost/beast/core/tcp_stream.hpp>
-#include <boost/beast/http/message_generator.hpp>
 #include <memory>
 #include <plog/Log.h>
 #include <string>
 
 namespace beast = boost::beast;
-namespace http = boost::beast::http;
+namespace http = beast::http;
+namespace websocket = beast::websocket;
 namespace net = boost::asio;
 using tcp = boost::asio::ip::tcp;
+
 
 class Session : public std::enable_shared_from_this<Session> {
 public:
   Session(tcp::socket &&socket, std::shared_ptr<Tile> &tile_map);
   void run();
+  void on_check_path(beast::error_code ec, std::size_t bytes_transferred);
+  void on_run();
+  void handle_messages();
+  void on_accept();
   void do_read();
   void on_read(beast::error_code ec, std::size_t bytes_transferred);
-  void send_response(http::message_generator &&boost);
-  void on_write(bool keep_alive, beast::error_code ec,
+  void on_write(beast::error_code ec,
                 std::size_t bytes_transferred);
   void do_close();
 
 private:
-  beast::tcp_stream stream;
+  websocket::stream<beast::tcp_stream> ws;
   beast::flat_buffer buffer;
   std::shared_ptr<Tile> tile_map;
-  http::request<http::string_body> req;
+  http::request<beast::http::string_body> req;
 };
 
 class Listener : public std::enable_shared_from_this<Listener> {
