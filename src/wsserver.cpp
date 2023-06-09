@@ -5,11 +5,13 @@
 #include <boost/lexical_cast.hpp>
 #include <boost/url/src.hpp>
 #include <chrono>
+#include <deque>
 #include <exception>
 #include <iterator>
 #include <memory>
 #include <nlohmann/json.hpp>
 #include <sstream>
+#include <vector>
 
 using json = nlohmann::json;
 
@@ -79,9 +81,11 @@ void Listener::on_accept(beast::error_code ec, tcp::socket socket) {
 }
 
 Session::Session(tcp::socket &&socket, std::shared_ptr<Tile> &tile_map)
-    : ws(std::move(socket)), tile_map(tile_map) {}
+    : ws(std::move(socket)), tile_map(tile_map), send_queue() {}
 
 void Session::run() {
+  s_connection = tile_map->connect(
+      boost::bind(&Session::send_tile_updates, shared_from_this()));
   net::dispatch(ws.get_executor(), beast::bind_front_handler(
                                        &Session::on_run, shared_from_this()));
 }
@@ -210,9 +214,54 @@ void Session::handle_messages() {
   }
 
   auto ok = boost::asio::buffer("OK", 2);
-  ws.text(true);
-  ws.async_write(
-      ok, beast::bind_front_handler(&Session::on_write, shared_from_this()));
+
+  send_queue.push_back(
+      WsMessage{.msg_type = WsMessage::TYPE::MSG_TEXT, .buf = ok});
+  send_messages();
+}
+
+void Session::send_tile_updates() {
+  auto tile_buf = tile_map->get_tile();
+  // TODO: Serialization of data
+  // std::vector<char> zero;
+  // zero.assign(reinterpret_cast<char *>(tile_buf.data()),
+  //             reinterpret_cast<char *>(tile_buf.data()) + tile_buf.size());
+  // // check if zero only contains 0 values
+  // if (std::all_of(zero.begin(), zero.end(), [](char c) { return c == 0; })) {
+  //   PLOG_DEBUG << "something went wrong, tile_buf only contains 0 bytes";
+  //   return;
+  // }
+  PLOG_DEBUG << "sending tile updates " << tile_buf.size() << " bytes";
+  send_queue.push_back(
+      WsMessage{.msg_type = WsMessage::TYPE::MSG_BINARY, .buf = tile_buf});
+}
+
+void Session::send_messages() {
+  if (!send_queue.empty()) {
+    auto &msg = send_queue.front();
+    if (msg.msg_type == WsMessage::TYPE::MSG_TEXT) {
+      ws.text(true);
+      PLOG_DEBUG << "sending MSG_TEXT " << msg.buf.size() << "bytes,  "
+                 << send_queue.size() - 1 << " left";
+    } else {
+      ws.binary(true);
+      PLOG_DEBUG << "sending MSG_BINARY " << msg.buf.size() << "bytes,  "
+                 << send_queue.size() - 1 << " left";
+    }
+    ws.async_write(msg.buf, beast::bind_front_handler(&Session::on_write,
+                                                      shared_from_this()));
+  } else {
+    PLOG_DEBUG << "nothing to send";
+    do_read();
+  }
+}
+
+void Session::nop(beast::error_code ec, std::size_t bytes_transferred) {
+  boost::ignore_unused(bytes_transferred);
+  if (ec) {
+    PLOG_ERROR << "Failed to write " << ec.message();
+    return;
+  }
 }
 
 void Session::on_write(beast::error_code ec, std::size_t bytes_transferred) {
@@ -221,13 +270,17 @@ void Session::on_write(beast::error_code ec, std::size_t bytes_transferred) {
     PLOG_ERROR << "Failed to write " << ec.message();
     return;
   }
+  PLOG_DEBUG << "sent " << bytes_transferred << " bytes";
   buffer.consume(buffer.size());
-  do_read();
+  send_queue.pop_front();
+  send_messages();
 }
+
 void Session::do_close() {
   beast::error_code ec;
   auto &stream = ws.next_layer();
-  stream.socket().shutdown(tcp::socket::shutdown_send, ec);
+  ws.close(websocket::close_code::normal, ec);
+  // stream.socket().shutdown(tcp::socket::shutdown_send, ec);
   if (ec) {
     PLOG_ERROR << "Could not shutdown socket " << ec.message();
   }

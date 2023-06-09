@@ -4,8 +4,8 @@ import time
 from websockets import client
 
 # Constants
-NUM_WORKERS = 5  # Number of workers to create
-NUM_CONNECTIONS_PER_WORKER = 1  # Number of connections per worker
+NUM_WORKERS = 2  # Number of workers to create
+NUM_CONNECTIONS_PER_WORKER = 100  # Number of connections per worker
 DURATION = 3  # Duration of the stress test in seconds
 
 # WebSocket server URL

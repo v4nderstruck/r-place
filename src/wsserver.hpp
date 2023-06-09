@@ -4,9 +4,13 @@
 #include "tile.hpp"
 #include <boost/asio.hpp>
 #include <boost/beast.hpp>
+#include <boost/signals2/connection.hpp>
+#include <deque>
 #include <memory>
 #include <plog/Log.h>
 #include <string>
+
+#define BOOST_ASIO_ENABLE_HANDLER_TRACKING  
 
 namespace beast = boost::beast;
 namespace http = beast::http;
@@ -14,6 +18,11 @@ namespace websocket = beast::websocket;
 namespace net = boost::asio;
 using tcp = boost::asio::ip::tcp;
 
+typedef struct WsMessage {
+  enum TYPE { MSG_TEXT, MSG_BINARY };
+  TYPE msg_type;
+  boost::asio::const_buffer buf;
+} WsMessage;
 
 class Session : public std::enable_shared_from_this<Session> {
 public:
@@ -25,11 +34,15 @@ public:
   void on_accept();
   void do_read();
   void on_read(beast::error_code ec, std::size_t bytes_transferred);
-  void on_write(beast::error_code ec,
-                std::size_t bytes_transferred);
+  void send_messages();
+  void on_write(beast::error_code ec, std::size_t bytes_transferred);
+  void nop(beast::error_code ec, std::size_t bytes_transferred);
   void do_close();
+  void send_tile_updates();
 
 private:
+  std::deque<WsMessage> send_queue;
+  signals::connection s_connection;
   websocket::stream<beast::tcp_stream> ws;
   beast::flat_buffer buffer;
   std::shared_ptr<Tile> tile_map;
