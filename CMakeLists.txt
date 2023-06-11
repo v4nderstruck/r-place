@@ -9,6 +9,7 @@ include(FetchContent)
 FetchContent_Declare(json URL https://github.com/nlohmann/json/releases/download/v3.11.2/json.tar.xz)
 FetchContent_MakeAvailable(json)
 
+
 set(INSTALL_DIR ${CMAKE_BINARY_DIR}/INSTALL)
 set(THIRD_PARTY_DIR ${CMAKE_SOURCE_DIR}/third-party)
 
@@ -24,6 +25,7 @@ ExternalProject_Add(
   BUILD_COMMAND ./b2 install -j8 --without-mpi
   INSTALL_DIR ${INSTALL_DIR}
 )
+
 ExternalProject_Add(
   plog 
   URL ${THIRD_PARTY_DIR}/plog-1.1.9.tar.gz
@@ -33,6 +35,17 @@ ExternalProject_Add(
   INSTALL_COMMAND cp -r ${CMAKE_BINARY_DIR}/plog/include/plog ${INSTALL_DIR}/include/
   INSTALL_DIR ${INSTALL_DIR}
 )
+
+ExternalProject_Add(
+  flatbuffers
+  GIT_REPOSITORY https://github.com/google/flatbuffers  
+  SOURCE_DIR ${CMAKE_BINARY_DIR}/flatbuffers
+  GIT_TAG v23.5.26
+  CONFIGURE_COMMAND ""
+  INSTALL_COMMAND cp -r ${CMAKE_BINARY_DIR}/flatbuffers/include/flatbuffers ${INSTALL_DIR}/include/
+  BUILD_COMMAND ""
+)
+
 configure_file(${THIRD_PARTY_DIR}/CLI11.hpp ${INSTALL_DIR}/include/CLI11.hpp COPYONLY)
 include_directories(${INSTALL_DIR}/include)
 

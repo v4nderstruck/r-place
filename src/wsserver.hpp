@@ -24,6 +24,7 @@ typedef struct WsMessage {
   boost::asio::const_buffer buf;
 } WsMessage;
 
+//TODO: proper session closing on error states
 class Session : public std::enable_shared_from_this<Session> {
 public:
   Session(tcp::socket &&socket, std::shared_ptr<Tile> &tile_map);

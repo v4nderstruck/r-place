@@ -206,7 +206,7 @@ void Session::handle_messages() {
     auto obj = json::parse(data);
     int x = obj["x"].get<int>();
     int y = obj["y"].get<int>();
-    int color = obj["color"].get<int>();
+    u_int32_t color = obj["color"].get<u_int32_t>();
     tile_map->set(x, y, color);
   } catch (json::parse_error &e) {
     PLOG_ERROR << "Failed to parse json " << data << " " << e.what();
@@ -221,19 +221,18 @@ void Session::handle_messages() {
 }
 
 void Session::send_tile_updates() {
-  auto tile_buf = tile_map->get_tile();
-  // TODO: Serialization of data
-  // std::vector<char> zero;
-  // zero.assign(reinterpret_cast<char *>(tile_buf.data()),
-  //             reinterpret_cast<char *>(tile_buf.data()) + tile_buf.size());
-  // // check if zero only contains 0 values
-  // if (std::all_of(zero.begin(), zero.end(), [](char c) { return c == 0; })) {
-  //   PLOG_DEBUG << "something went wrong, tile_buf only contains 0 bytes";
-  //   return;
-  // }
-  PLOG_DEBUG << "sending tile updates " << tile_buf.size() << " bytes";
+  flatbuffers::FlatBufferBuilder builder;
+  auto ser = tile_map->serialize(builder);
+  builder.Finish(ser);
+
+  auto tile_buf = builder.GetBufferPointer();
+  auto tile_buf_size = builder.GetSize();
+
+  auto boost_buf = boost::asio::buffer(tile_buf, tile_buf_size);
+
+  PLOG_DEBUG << "sending tile updates " << tile_buf_size << " bytes";
   send_queue.push_back(
-      WsMessage{.msg_type = WsMessage::TYPE::MSG_BINARY, .buf = tile_buf});
+      WsMessage{.msg_type = WsMessage::TYPE::MSG_BINARY, .buf = boost_buf});
 }
 
 void Session::send_messages() {

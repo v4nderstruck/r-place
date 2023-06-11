@@ -1,0 +1,7 @@
+namespace protocol;
+
+table TileMapUpdate {
+  x: int;
+  y: int;
+  tiles: [uint8];
+}
