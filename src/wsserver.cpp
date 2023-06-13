@@ -141,14 +141,13 @@ void Session::on_check_path(beast::error_code ec,
         beast::async_write(
             stream, std::move(msg),
             beast::bind_front_handler(&Session::on_write, shared_from_this()));
-        return;
+        return do_close();
       }
 
       PLOG_DEBUG << req.method_string() << req.target() << " accepting?";
       // else accept the websocket
       ws.accept(req);
       on_accept();
-      return;
 
     } catch (std::length_error &e) {
       PLOG_ERROR << req.method_string() << req.target() << " invalid url";
@@ -170,7 +169,6 @@ void Session::on_check_path(beast::error_code ec,
 }
 
 void Session::on_accept() {
-  PLOG_DEBUG << "accepted";
   do_read();
 }
 
@@ -188,16 +186,15 @@ void Session::on_read(beast::error_code ec, std::size_t bytes_transferred) {
   }
   if (ec) {
     PLOG_ERROR << "Failed to read " << ec.message();
-    return;
+    return do_close();
   }
   handle_messages();
-  return;
 }
 
 void Session::handle_messages() {
   if (!ws.got_text()) {
-    PLOG_ERROR << "Unexpected message type ";
-    return;
+    PLOG_ERROR << "Unexpected message type";
+    return do_close();
   }
   PLOG_DEBUG << "handle message";
   auto data = beast::buffers_to_string(buffer.data());
@@ -210,7 +207,10 @@ void Session::handle_messages() {
     tile_map->set(x, y, color);
   } catch (json::parse_error &e) {
     PLOG_ERROR << "Failed to parse json " << data << " " << e.what();
-    return;
+    do_read();
+  } catch (std::exception &e) {
+    PLOG_ERROR << "Failed to to " << e.what();
+    do_close();
   }
 
   auto ok = boost::asio::buffer("OK", 2);
@@ -267,7 +267,7 @@ void Session::on_write(beast::error_code ec, std::size_t bytes_transferred) {
   boost::ignore_unused(bytes_transferred);
   if (ec) {
     PLOG_ERROR << "Failed to write " << ec.message();
-    return;
+    return do_close();
   }
   PLOG_DEBUG << "sent " << bytes_transferred << " bytes";
   buffer.consume(buffer.size());
@@ -277,7 +277,7 @@ void Session::on_write(beast::error_code ec, std::size_t bytes_transferred) {
 
 void Session::do_close() {
   beast::error_code ec;
-  auto &stream = ws.next_layer();
+  // auto &stream = ws.next_layer();
   ws.close(websocket::close_code::normal, ec);
   // stream.socket().shutdown(tcp::socket::shutdown_send, ec);
   if (ec) {

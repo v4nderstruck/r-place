@@ -12,7 +12,7 @@
 namespace signals = boost::signals2;
 namespace posix_time = boost::posix_time;
 
-#define UPDATE_INTERVAL posix_time::milliseconds(1000)
+#define UPDATE_INTERVAL_MS 1000
 #define UPDATE_N_THRESH 10
 
 /// todo: add write ahead log for better tile updates and replication later

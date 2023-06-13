@@ -1,4 +1,5 @@
 import logging
+import numpy as np
 import asyncio
 import time
 from websockets import client
@@ -9,7 +10,7 @@ from protocol.TileMapUpdate import TileMapUpdate
 NUM_WORKERS = 2  # Number of workers to create
 NUM_CONNECTIONS_PER_WORKER = 100  # Number of connections per worker
 DURATION = 3  # Duration of the stress test in seconds
-SLEEP_TIME = 0.1  # Sleep time between each message in seconds
+SLEEP_TIME = 0.01  # Sleep time between each message in seconds
 TILE_X = 1000
 
 # WebSocket server URL
@@ -19,11 +20,14 @@ SERVER_URL = "ws://localhost:8081/tile"
 stop = False
 
 msg_dict = []
+
+
 def find_byte_sequence(arr, sequence):
     import numpy as np
     arr_bytes = arr.astype(np.uint8).tobytes()
     index = arr_bytes.find(sequence)
-    return index 
+    return index
+
 
 async def worker(worker_id, msg):
     import random
@@ -32,62 +36,69 @@ async def worker(worker_id, msg):
     # 16mb frames
     connection = await client.connect(SERVER_URL, max_size=2**24)
 
-    check = []
+    check = {}
+    last_bit_map = None
     while True:
-        if (datetime.datetime.now() - start).total_seconds() * 1000 >= DURATION * 1000:
-            await connection.close()
-            return
         send, to_check = msg[random.randint(0, len(msg) - 1)]
-        print("send", send)
+        # print("send", send)
         await connection.send(send)
-        check.append(to_check)
-        check[-1]["acked"] = False
+        # type: ignore
+        # type: ignore
+        check[f"{to_check['x']}_{to_check['y']}"] = to_check["color"]
         recv_data = await connection.recv()
         # TODO: Better acking
         if isinstance(recv_data, str):
+            pass
             # set last check item to acked, not well impl
-            check[-1]["acked"] = True 
-            print(recv_data)
         elif isinstance(recv_data, bytes):
             # check the data is correct, take x * y as offset and check for 4
             # bytes matching the color
-            print("recveid bytes")
             tile = TileMapUpdate.GetRootAsTileMapUpdate(recv_data, 0)
             tile_map = tile.TilesAsNumpy()
-            print(f"Recieved {tile.X()}: {tile.Y()} tile, tile size {tile_map.shape}")
-            for check_tile in check:
-                if check_tile["acked"] == False:
-                    continue
-                # offset in bytes
-                offset = (check_tile["x"] + (check_tile["y"] * TILE_X)) * 4
-                byte_data = check_tile["color"].to_bytes(4, byteorder="little")
-                found_in = find_byte_sequence(tile_map, byte_data)
-
-                if found_in != offset:
-                    print("Data mismatch")
-                    print(f"Expected {byte_data} at {check_tile['x']}, {check_tile['y']}(offset {offset})")
-                    print(f"Received {tile_map[offset:offset + 4]}")
-                    print(f"but found at {found_in}")
-                    # find byte_data in recv_data
-                    await connection.close()
-                    return
-            check = []
+            last_bit_map = tile_map
+            print(
+                f"Recieved {tile.X()}: {tile.Y()} tile, tile size {tile_map.shape}")  # type: ignore
         else:
             print("Unknown data type")
 
         await asyncio.sleep(SLEEP_TIME)
+
+        if (datetime.datetime.now() - start).total_seconds() * 1000 >= DURATION * 1000:
+            print("Stopping worker, closing connection...")
+            await connection.close()
+            correct_values = 0
+            print("Checking data...")
+            for coords, color in check.items():
+                x = int(coords.split("_")[0])
+                y = int(coords.split("_")[1])
+                offset = (x + y * TILE_X) * 4
+                byte_data = color.to_bytes(4, byteorder="little")
+                found_in = find_byte_sequence(last_bit_map, byte_data)
+                if found_in != offset:
+                    pass
+                    # print(
+                    #     f"Expected {byte_data} at {x}, {y} (offset {offset})")
+                    # # type: ignore
+                    # print(f"Received {last_bit_map[offset:offset + 4]}")
+                    # print(f"but found at {found_in}")
+                else:
+                    correct_values += 1
+
+            print(f"Correct values: {correct_values} / {len(check)}")
+            return
 
 
 def random_msg():
     """adds random messages to the msg_dict in JSON {x: int, y: int, color: int} format"""
     import random
     import json
+    import sys
     global msg_dict
-    msg_dict=[]
+    msg_dict = []
     for _i in range(10000):
-        x=random.randint(0, 999)
-        y=random.randint(0, 999)
-        color=random.randint(0, 10000)
+        x = random.randint(0, 999)
+        y = random.randint(0, 999)
+        color = random.randint(0, 2**32 - 1)
         msg_dict.append(
             (json.dumps({"x": x, "y": y,
                          "color": color}),
@@ -108,7 +119,7 @@ def main():
 
 if __name__ == "__main__":
     logging.basicConfig(
-        format = "%(asctime)s %(message)s",
-        level = logging.INFO,
+        format="%(asctime)s %(message)s",
+        level=logging.INFO,
     )
     main()

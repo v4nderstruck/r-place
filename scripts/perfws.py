@@ -7,6 +7,7 @@ from websockets import client
 NUM_WORKERS = 2  # Number of workers to create
 NUM_CONNECTIONS_PER_WORKER = 100  # Number of connections per worker
 DURATION = 3  # Duration of the stress test in seconds
+TILE_X = 1000
 
 # WebSocket server URL
 SERVER_URL = "ws://localhost:8081/tile"
@@ -25,14 +26,15 @@ async def worker(worker_id, result, msg):
         connections.append(await client.connect(SERVER_URL))
 
     while True:
-        if (datetime.datetime.now() - start).total_seconds() * 1000 >= DURATION * 1000:
-            return
         for ws in connections:
             send = msg[random.randint(0, len(msg) - 1)]
             await ws.send(send)
-            # await ws.recv()
+            await ws.recv()
             # if if we passed the duration
             result[worker_id] += 1
+
+        if (datetime.datetime.now() - start).total_seconds() * 1000 >= DURATION * 1000:
+            return
 
 
 
@@ -41,11 +43,19 @@ def random_msg():
     """adds random messages to the msg_dict in JSON {x: int, y: int, color: int} format"""
     import random
     import json
+    import sys
     global msg_dict
     msg_dict = []
-    for i in range(10000):
-        msg_dict.append(json.dumps({"x": random.randint(0, 999), "y": random.randint(0, 999),
-                         "color": random.randint(0, 10000)}))
+    for _i in range(10000):
+        x = random.randint(0, 999)
+        y = random.randint(0, 999)
+        color = random.randint(0, 2**32 - 1)
+        msg_dict.append(
+            (json.dumps({"x": x, "y": y,
+                         "color": color}),
+             {"x": x, "y": y, "color": color}
+             )
+        )
 
 def coroutine(i, result, msg):
     asyncio.run(worker(i, result, msg))
