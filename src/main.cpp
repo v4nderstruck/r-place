@@ -1,64 +1,43 @@
-#include "tile.hpp"
-#include "wsserver.hpp"
-#include <CLI11.hpp>
-#include <boost/asio/ip/address.hpp>
+#include <caf/actor_ostream.hpp>
+#include <caf/actor_system.hpp>
+#include <caf/caf_main.hpp>
+#include <caf/event_based_actor.hpp>
 #include <iostream>
-#include <memory>
-#include <plog/Formatters/TxtFormatter.h>
-#include <plog/Initializers/ConsoleInitializer.h>
-#include <plog/Log.h>
-#include <thread>
 
-#define APP_DESC "r/place clone v0.0.1"
+using namespace caf;
 
-int main(int argc, char **argv) {
-  plog::init<plog::TxtFormatter>(plog::debug, plog::streamStdOut);
-
-  CLI::App app{APP_DESC};
-  int width = 1000;
-  int height = 1000;
-  int num_threads = 2;
-
-  app.add_option("-x,--width", width, "Width of the canvas")
-      ->check(CLI::Range(1, 10000));
-  app.add_option("-y,--height", height, "Height of the canvas")
-      ->check(CLI::Range(1, 10000));
-  app.add_option("-t,--threads", num_threads, "Number of threads to use")
-      ->check(CLI::Range(1, 100));
-
-  std::string addr = "0.0.0.0";
-  app.add_option<std::string>("-b,--bind", addr,
-                              "Address to bind to (eg. 0.0.0.0)");
-  unsigned short port = 8081;
-  app.add_option("-p,--port", port, "Port to bind to (eg. 8081)")
-      ->check(CLI::Range(1, 65535));
-
-  auto const bind_addr = net::ip::make_address(addr);
-
-  try {
-    app.parse(argc, argv);
-  } catch (const CLI::ParseError &e) {
-    std::cout << e.what() << std::endl;
-    return app.exit(e);
-  }
-
-  PLOG_INFO << "Starting tile server with width " << width << " and height "
-            << height;
-  PLOG_INFO << "Binding to " << bind_addr << ":" << port;
-  PLOG_INFO << "Using " << num_threads << " threads";
-
-  net::io_context ioc{num_threads};
-  auto tile = std::make_shared<Tile>(width, height);
-
-  std::make_shared<Listener>(ioc, tcp::endpoint(bind_addr, port), tile)->run();
-
-  std::vector<std::thread> t;
-  t.reserve(num_threads - 1);
-
-  for (auto i = num_threads - 1; i > 0; --i) {
-    t.emplace_back([&ioc, &tile] { ioc.run(); });
-  }
-
-  ioc.run();
-  return 0;
+behavior mirror(event_based_actor* self) {
+  // return the (initial) actor behavior
+  return {
+    // a handler for messages containing a single string
+    // that replies with a string
+    [=](const std::string& what) -> std::string {
+      // prints "Hello World!" via aout (thread-safe cout wrapper)
+      aout(self) << what << std::endl;
+      // reply "!dlroW olleH"
+      return std::string{what.rbegin(), what.rend()};
+    },
+  };
 }
+
+void hello_world(event_based_actor* self, const actor& buddy) {
+  // send "Hello World!" to our buddy ...
+  self->request(buddy, std::chrono::seconds(10), "Hello World!")
+    .then(
+      // ... wait up to 10s for a response ...
+      [=](const std::string& what) {
+        // ... and print it
+        aout(self) << what << std::endl;
+      });
+}
+
+void caf_main(actor_system& sys) {
+  // create a new actor that calls 'mirror()'
+  auto mirror_actor = sys.spawn(mirror);
+  // create another actor that calls 'hello_world(mirror_actor)';
+  sys.spawn(hello_world, mirror_actor);
+  // the system will wait until both actors are done before exiting the program
+}
+
+CAF_MAIN()
+

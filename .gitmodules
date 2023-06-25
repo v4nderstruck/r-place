@@ -1,0 +1,3 @@
+[submodule "third-party/actor-framework"]
+	path = third-party/actor-framework
+	url = https://github.com/actor-framework/actor-framework.git
