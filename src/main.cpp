@@ -153,7 +153,7 @@ int caf_main(actor_system &sys) {
 
   auto server = ws::with(sys)
                     .accept(8081)
-                    .max_connections(128)
+                    .max_connections(156)
                     .on_request([](ws::acceptor<> &ac) {
                       auto header = ac.header();
                       if (header.path() == "/rplace") {
